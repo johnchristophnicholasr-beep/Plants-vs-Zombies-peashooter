@@ -1,4 +1,4 @@
-name: Build Android APK
+name: Build Plants vs Zombies Peashooter APK
 
 on:
   workflow_dispatch:
@@ -11,8 +11,919 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Checkout
+      - name: Checkout repository
         uses: actions/checkout@v4
+
+      - name: Create Android project
+        shell: bash
+        run: |
+          set -e
+
+          mkdir -p app/src/main/java/com/johncreator/peashooter
+          mkdir -p app/src/main/res/values
+
+          cat > settings.gradle <<'EOF'
+          pluginManagement {
+              repositories {
+                  google()
+                  mavenCentral()
+                  gradlePluginPortal()
+              }
+          }
+
+          dependencyResolutionManagement {
+              repositoriesMode.set(RepositoriesMode.FAIL_ON_PROJECT_REPOS)
+              repositories {
+                  google()
+                  mavenCentral()
+              }
+          }
+
+          rootProject.name = "Plants vs Zombies Peashooter"
+          include(":app")
+          EOF
+
+          cat > build.gradle <<'EOF'
+          plugins {
+              id 'com.android.application' version '8.7.3' apply false
+          }
+          EOF
+
+          cat > gradle.properties <<'EOF'
+          org.gradle.jvmargs=-Xmx2048m -Dfile.encoding=UTF-8
+          android.useAndroidX=true
+          EOF
+
+          cat > app/build.gradle <<'EOF'
+          plugins {
+              id 'com.android.application'
+          }
+
+          android {
+              namespace 'com.johncreator.peashooter'
+              compileSdk 35
+
+              defaultConfig {
+                  applicationId 'com.johncreator.peashooter'
+                  minSdk 23
+                  targetSdk 35
+                  versionCode 1
+                  versionName '1.0'
+              }
+          }
+          EOF
+
+          cat > app/src/main/AndroidManifest.xml <<'EOF'
+          <manifest xmlns:android="http://schemas.android.com/apk/res/android">
+
+              <application
+                  android:theme="@style/AppTheme"
+                  android:label="Plants vs Zombies Peashooter"
+                  android:allowBackup="false"
+                  android:supportsRtl="true">
+
+                  <activity
+                      android:name=".MainActivity"
+                      android:screenOrientation="landscape"
+                      android:exported="true">
+
+                      <intent-filter>
+                          <action android:name="android.intent.action.MAIN" />
+                          <category android:name="android.intent.category.LAUNCHER" />
+                      </intent-filter>
+
+                  </activity>
+
+              </application>
+
+          </manifest>
+          EOF
+
+          cat > app/src/main/res/values/styles.xml <<'EOF'
+          <resources>
+
+              <style name="AppTheme"
+                  parent="@android:style/Theme.Material.Light.NoActionBar">
+
+                  <item name="android:fontFamily">sans</item>
+                  <item name="android:windowFullscreen">true</item>
+                  <item name="android:windowActionModeOverlay">true</item>
+                  <item name="android:colorAccent">#66BB6A</item>
+
+              </style>
+
+          </resources>
+          EOF
+
+          cat > app/src/main/java/com/johncreator/peashooter/MainActivity.java <<'EOF'
+          package com.johncreator.peashooter;
+
+          import android.app.Activity;
+          import android.os.Bundle;
+          import android.graphics.Canvas;
+          import android.graphics.Color;
+          import android.graphics.Paint;
+          import android.view.MotionEvent;
+          import android.view.View;
+          import android.view.Window;
+          import android.view.WindowManager;
+
+          import java.util.ArrayList;
+          import java.util.Iterator;
+          import java.util.Random;
+
+          public class MainActivity extends Activity {
+
+              @Override
+              protected void onCreate(Bundle savedInstanceState) {
+                  super.onCreate(savedInstanceState);
+
+                  requestWindowFeature(Window.FEATURE_NO_TITLE);
+
+                  getWindow().setFlags(
+                          WindowManager.LayoutParams.FLAG_FULLSCREEN,
+                          WindowManager.LayoutParams.FLAG_FULLSCREEN
+                  );
+
+                  setContentView(new GameView());
+              }
+
+              class GameView extends View {
+
+                  Paint paint = new Paint(Paint.ANTI_ALIAS_FLAG);
+                  Random random = new Random();
+
+                  int screen = 0;
+                  int world = 0;
+                  int wave = 1;
+                  int lane = 2;
+
+                  int plantHP = 100;
+                  int plantDamage = 10;
+
+                  long lastSpawn = 0;
+                  long lastShot = 0;
+
+                  boolean fog = false;
+                  boolean boss = false;
+
+                  String plant = "PEASHOOTER";
+                  String buff = "NONE";
+
+                  ArrayList<Zombie> zombies = new ArrayList<>();
+                  ArrayList<Pea> peas = new ArrayList<>();
+
+                  String[] worlds = {
+                          "DAY",
+                          "NIGHT",
+                          "POOL",
+                          "NIGHT POOL",
+                          "ROOF"
+                  };
+
+                  String[] zombieNames = {
+                          "Zombie",
+                          "Flag Zombie",
+                          "Conehead",
+                          "Buckethead",
+                          "Pole Vaulting",
+                          "Newspaper",
+                          "Screen Door",
+                          "Football",
+                          "Dancing",
+                          "Backup Dancer",
+                          "Ducky Tube",
+                          "Snorkel",
+                          "Dolphin Rider",
+                          "Zomboni",
+                          "Bobsled Team",
+                          "Jack-in-the-Box",
+                          "Balloon",
+                          "Digger",
+                          "Pogo",
+                          "Ladder",
+                          "Catapult",
+                          "Gargantuar",
+                          "Imp"
+                  };
+
+                  GameView() {
+                      super(MainActivity.this);
+                      paint.setTypeface(
+                              android.graphics.Typeface.create(
+                                      "sans",
+                                      android.graphics.Typeface.NORMAL
+                              )
+                      );
+                  }
+
+                  void background(Canvas c, int color) {
+                      c.drawColor(color);
+                  }
+
+                  void text(Canvas c, String s, float x, float y, float size) {
+                      paint.setColor(Color.WHITE);
+                      paint.setTextSize(size);
+                      paint.setStyle(Paint.Style.FILL);
+                      c.drawText(s, x, y, paint);
+                  }
+
+                  void rectangle(
+                          Canvas c,
+                          float left,
+                          float top,
+                          float right,
+                          float bottom,
+                          int color
+                  ) {
+                      paint.setColor(color);
+                      paint.setStyle(Paint.Style.FILL);
+                      c.drawRect(left, top, right, bottom, paint);
+                  }
+
+                  @Override
+                  protected void onDraw(Canvas canvas) {
+                      super.onDraw(canvas);
+
+                      if (screen == 0) {
+                          drawLobby(canvas);
+                      } else if (screen == 1) {
+                          drawTutorial(canvas);
+                      } else {
+                          drawGame(canvas);
+                      }
+
+                      invalidate();
+                  }
+
+                  void drawLobby(Canvas c) {
+
+                      background(c, Color.rgb(75, 150, 75));
+
+                      rectangle(
+                              c,
+                              0,
+                              getHeight() * 0.62f,
+                              getWidth(),
+                              getHeight(),
+                              Color.rgb(125, 85, 45)
+                      );
+
+                      text(
+                              c,
+                              "PLANTS VS ZOMBIES",
+                              35,
+                              65,
+                              34
+                      );
+
+                      text(
+                              c,
+                              "PEASHOOTER",
+                              35,
+                              105,
+                              32
+                      );
+
+                      text(
+                              c,
+                              "2D • SIX LANES • NO ADS",
+                              35,
+                              138,
+                              18
+                      );
+
+                      rectangle(
+                              c,
+                              getWidth() / 2f - 150,
+                              180,
+                              getWidth() / 2f + 150,
+                              260,
+                              Color.rgb(35, 120, 65)
+                      );
+
+                      text(
+                              c,
+                              "START",
+                              getWidth() / 2f - 55,
+                              232,
+                              30
+                      );
+
+                      rectangle(
+                              c,
+                              25,
+                              getHeight() - 90,
+                              300,
+                              getHeight() - 25,
+                              Color.rgb(45, 75, 125)
+                      );
+
+                      text(
+                              c,
+                              "ASSISTANT HELPER",
+                              42,
+                              getHeight() - 50,
+                              20
+                      );
+
+                      text(
+                              c,
+                              "Classic backyard-inspired lobby",
+                              getWidth() / 2f - 135,
+                              getHeight() - 45,
+                              17
+                      );
+                  }
+
+                  void drawTutorial(Canvas c) {
+
+                      background(c, Color.rgb(35, 90, 55));
+
+                      text(
+                              c,
+                              "TUTORIAL " + wave,
+                              30,
+                              55,
+                              30
+                      );
+
+                      if (wave == 1) {
+
+                          text(
+                                  c,
+                                  "Move your Peashooter between 6 lanes.",
+                                  30,
+                                  100,
+                                  20
+                          );
+
+                          text(
+                                  c,
+                                  "It shoots automatically.",
+                                  30,
+                                  135,
+                                  20
+                          );
+
+                          text(
+                                  c,
+                                  "Zombies can spawn in any lane.",
+                                  30,
+                                  170,
+                                  20
+                          );
+
+                      } else {
+
+                          text(
+                                  c,
+                                  "BUFF TUTORIAL",
+                                  30,
+                                  100,
+                                  24
+                          );
+
+                          text(
+                                  c,
+                                  "Fire Pea = 15 damage",
+                                  30,
+                                  135,
+                                  18
+                          );
+
+                          text(
+                                  c,
+                                  "Snow Pea = 16 damage",
+                                  30,
+                                  165,
+                                  18
+                          );
+
+                          text(
+                                  c,
+                                  "Obsidian Pea = 25 damage",
+                                  30,
+                                  195,
+                                  18
+                          );
+
+                          text(
+                                  c,
+                                  "Damage, HP and Defense buffs are random.",
+                                  30,
+                                  225,
+                                  18
+                          );
+                      }
+
+                      rectangle(
+                              c,
+                              getWidth() - 210,
+                              getHeight() - 85,
+                              getWidth() - 25,
+                              getHeight() - 25,
+                              Color.rgb(40, 115, 70)
+                      );
+
+                      text(
+                              c,
+                              "NEXT",
+                              getWidth() - 160,
+                              getHeight() - 45,
+                              23
+                      );
+                  }
+
+                  void drawGame(Canvas c) {
+
+                      int backgroundColor;
+
+                      if (world == 1 || world == 3) {
+                          backgroundColor = Color.rgb(25, 35, 65);
+                      } else {
+                          backgroundColor = Color.rgb(90, 165, 90);
+                      }
+
+                      background(c, backgroundColor);
+
+                      float top = 100;
+                      float bottom = getHeight() - 70;
+                      float laneHeight = (bottom - top) / 6f;
+
+                      for (int i = 0; i < 6; i++) {
+
+                          int color;
+
+                          if (i % 2 == 0) {
+                              color = Color.rgb(90, 175, 90);
+                          } else {
+                              color = Color.rgb(75, 155, 75);
+                          }
+
+                          rectangle(
+                                  c,
+                                  0,
+                                  top + i * laneHeight,
+                                  getWidth(),
+                                  top + (i + 1) * laneHeight,
+                                  color
+                          );
+                      }
+
+                      if (world == 2 || world == 3) {
+
+                          text(
+                                  c,
+                                  "POOL",
+                                  getWidth() - 100,
+                                  30,
+                                  18
+                          );
+                      }
+
+                      if (fog) {
+
+                          rectangle(
+                                  c,
+                                  0,
+                                  top,
+                                  getWidth(),
+                                  bottom,
+                                  Color.argb(145, 25, 25, 35)
+                          );
+                      }
+
+                      text(
+                              c,
+                              worlds[world] + "  WAVE " + wave + "/10",
+                              20,
+                              30,
+                              22
+                      );
+
+                      text(
+                              c,
+                              plant + "  HP " + plantHP,
+                              20,
+                              60,
+                              17
+                      );
+
+                      text(
+                              c,
+                              "BUFF: " + buff + "  DMG " + plantDamage,
+                              300,
+                              30,
+                              16
+                      );
+
+                      if (boss) {
+                          text(
+                                  c,
+                                  "BOSS",
+                                  getWidth() - 90,
+                                  30,
+                                  20
+                          );
+                      }
+
+                      float plantY =
+                              top + (lane + 0.5f) * laneHeight;
+
+                      paint.setColor(Color.rgb(50, 185, 70));
+                      c.drawCircle(90, plantY, 28, paint);
+
+                      paint.setColor(Color.rgb(20, 105, 40));
+                      c.drawCircle(112, plantY - 3, 11, paint);
+
+                      for (Pea pea : peas) {
+
+                          if (pea.fire && pea.snow) {
+                              paint.setColor(Color.rgb(220, 90, 220));
+                          } else if (pea.fire) {
+                              paint.setColor(Color.rgb(255, 120, 25));
+                          } else if (pea.snow) {
+                              paint.setColor(Color.CYAN);
+                          } else {
+                              paint.setColor(Color.rgb(90, 230, 90));
+                          }
+
+                          c.drawCircle(
+                                  pea.x,
+                                  pea.y,
+                                  7,
+                                  paint
+                          );
+                      }
+
+                      for (Zombie z : zombies) {
+
+                          paint.setColor(z.color);
+
+                          c.drawCircle(
+                                  z.x,
+                                  z.y,
+                                  24,
+                                  paint
+                          );
+
+                          text(
+                                  c,
+                                  z.name,
+                                  z.x - 35,
+                                  z.y + 40,
+                                  10
+                          );
+                      }
+
+                      for (int i = 0; i < 6; i++) {
+
+                          float left = 10 + i * 70;
+
+                          rectangle(
+                                  c,
+                                  left,
+                                  getHeight() - 55,
+                                  left + 55,
+                                  getHeight() - 10,
+                                  Color.rgb(40, 90, 145)
+                          );
+
+                          text(
+                                  c,
+                                  String.valueOf(i + 1),
+                                  left + 21,
+                                  getHeight() - 25,
+                                  15
+                          );
+                      }
+
+                      long now = System.currentTimeMillis();
+
+                      if (now - lastSpawn > 1100) {
+                          spawnZombie();
+                          lastSpawn = now;
+                      }
+
+                      if (now - lastShot > 450) {
+                          shoot();
+                          lastShot = now;
+                      }
+
+                      updateGame();
+                  }
+
+                  void spawnZombie() {
+
+                      if (random.nextFloat() > 0.70f) {
+                          return;
+                      }
+
+                      String type =
+                              zombieNames[
+                                      random.nextInt(zombieNames.length)
+                              ];
+
+                      int randomLane =
+                              random.nextInt(6);
+
+                      float top = 100;
+                      float laneHeight =
+                              (getHeight() - 170) / 6f;
+
+                      zombies.add(
+                              new Zombie(
+                                      type,
+                                      getWidth() + 30,
+                                      top + (randomLane + 0.5f) * laneHeight
+                              )
+                      );
+                  }
+
+                  void shoot() {
+
+                      float top = 100;
+
+                      float laneHeight =
+                              (getHeight() - 170) / 6f;
+
+                      float y =
+                              top + (lane + 0.5f) * laneHeight;
+
+                      if (plant.equals("THREEPEATER")) {
+
+                          for (int i = -1; i <= 1; i++) {
+
+                              int targetLane =
+                                      lane + i;
+
+                              if (targetLane >= 0 &&
+                                      targetLane < 6) {
+
+                                  float targetY =
+                                          top +
+                                          (targetLane + 0.5f) *
+                                          laneHeight;
+
+                                  Pea pea =
+                                          new Pea(125, targetY);
+
+                                  setPeaBuff(pea);
+
+                                  peas.add(pea);
+                              }
+                          }
+
+                      } else {
+
+                          Pea pea =
+                                  new Pea(125, y);
+
+                          setPeaBuff(pea);
+
+                          peas.add(pea);
+                      }
+                  }
+
+                  void setPeaBuff(Pea pea) {
+
+                      pea.damage = plantDamage;
+
+                      pea.fire =
+                              buff.equals("FIRE PEA") ||
+                              buff.equals("OBSIDIAN PEA");
+
+                      pea.snow =
+                              buff.equals("SNOW PEA") ||
+                              buff.equals("OBSIDIAN PEA");
+                  }
+
+                  void updateGame() {
+
+                      for (Pea pea : peas) {
+                          pea.x += 22;
+                      }
+
+                      for (Zombie z : zombies) {
+                          z.x -= 4;
+                      }
+
+                      Iterator<Pea> peaIterator =
+                              peas.iterator();
+
+                      while (peaIterator.hasNext()) {
+
+                          Pea pea =
+                                  peaIterator.next();
+
+                          boolean hit = false;
+
+                          for (Zombie z : zombies) {
+
+                              if (Math.abs(pea.x - z.x) < 25 &&
+                                      Math.abs(pea.y - z.y) < 25) {
+
+                                  z.hp -= pea.damage;
+                                  hit = true;
+                                  break;
+                              }
+                          }
+
+                          if (hit) {
+                              peaIterator.remove();
+                          }
+                      }
+
+                      Iterator<Zombie> zombieIterator =
+                              zombies.iterator();
+
+                      while (zombieIterator.hasNext()) {
+
+                          Zombie z =
+                                  zombieIterator.next();
+
+                          if (z.hp <= 0) {
+                              zombieIterator.remove();
+                          } else if (z.x < 55) {
+
+                              plantHP -= 5;
+                              zombieIterator.remove();
+                          }
+                      }
+
+                      if (plantHP <= 0) {
+
+                          plantHP = 100;
+                          zombies.clear();
+                          peas.clear();
+                      }
+                  }
+
+                  void startGame() {
+
+                      screen = 2;
+                      world = 0;
+                      wave = 1;
+                      lane = 2;
+
+                      plantHP = 100;
+                      plantDamage = 10;
+
+                      plant = "PEASHOOTER";
+                      buff = "NONE";
+
+                      fog = false;
+                      boss = false;
+
+                      zombies.clear();
+                      peas.clear();
+                  }
+
+                  @Override
+                  public boolean onTouchEvent(MotionEvent event) {
+
+                      if (event.getAction() != MotionEvent.ACTION_UP) {
+                          return true;
+                      }
+
+                      float x = event.getX();
+                      float y = event.getY();
+
+                      if (screen == 0) {
+
+                          if (y > 160 && y < 290) {
+                              screen = 1;
+                              wave = 1;
+                          }
+
+                      } else if (screen == 1) {
+
+                          if (x > getWidth() - 240 &&
+                                  y > getHeight() - 110) {
+
+                              if (wave == 1) {
+                                  wave = 2;
+                              } else {
+                                  startGame();
+                              }
+                          }
+
+                      } else {
+
+                          if (y > getHeight() - 70) {
+
+                              int selectedLane =
+                                      (int)(x / 70);
+
+                              if (selectedLane >= 0 &&
+                                      selectedLane < 6) {
+
+                                  lane = selectedLane;
+                              }
+
+                          } else if (y < 90) {
+
+                              randomBuff();
+                          }
+                      }
+
+                      return true;
+                  }
+
+                  void randomBuff() {
+
+                      String[] buffs = {
+                              "FIRE PEA",
+                              "SNOW PEA",
+                              "OBSIDIAN PEA",
+                              "DAMAGE x5",
+                              "HP +100",
+                              "DEFENSE +50",
+                              "RANDOM PICK"
+                      };
+
+                      buff =
+                              buffs[
+                                      random.nextInt(buffs.length)
+                              ];
+
+                      if (buff.equals("FIRE PEA")) {
+                          plantDamage = 15;
+                      } else if (buff.equals("SNOW PEA")) {
+                          plantDamage = 16;
+                      } else if (buff.equals("OBSIDIAN PEA")) {
+                          plantDamage = 25;
+                      } else if (buff.equals("DAMAGE x5")) {
+                          plantDamage = 50;
+                      } else if (buff.equals("HP +100")) {
+                          plantHP += 100;
+                      } else if (buff.equals("DEFENSE +50")) {
+                          plantHP += 50;
+                      } else if (buff.equals("RANDOM PICK")) {
+                          plantDamage =
+                                  10 + random.nextInt(41);
+                      }
+                  }
+
+                  class Pea {
+
+                      float x;
+                      float y;
+
+                      int damage;
+
+                      boolean fire;
+                      boolean snow;
+
+                      Pea(float x, float y) {
+                          this.x = x;
+                          this.y = y;
+                      }
+                  }
+
+                  class Zombie {
+
+                      String name;
+
+                      float x;
+                      float y;
+
+                      int hp;
+                      int color;
+
+                      Zombie(
+                              String name,
+                              float x,
+                              float y
+                      ) {
+
+                          this.name = name;
+                          this.x = x;
+                          this.y = y;
+
+                          if (name.equals("Gargantuar")) {
+                              hp = 180;
+                              color =
+                                      Color.rgb(110, 45, 130);
+                          } else if (name.equals("Buckethead")) {
+                              hp = 80;
+                              color =
+                                      Color.rgb(80, 130, 90);
+                          } else if (name.equals("Football")) {
+                              hp = 70;
+                              color =
+                                      Color.rgb(120, 70, 70);
+                          } else {
+                              hp = 40;
+                              color =
+                                      Color.rgb(100, 150, 100);
+                          }
+                      }
+                  }
+              }
+          }
+          EOF
 
       - name: Set up Java
         uses: actions/setup-java@v4
@@ -22,12 +933,22 @@ jobs:
 
       - name: Set up Gradle
         uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.9'
 
       - name: Build APK
-        run: gradle assembleDebug
+        run: gradle --no-daemon assembleDebug
+
+      - name: Verify APK
+        shell: bash
+        run: |
+          set -e
+          test -f app/build/outputs/apk/debug/app-debug.apk
+          ls -lh app/build/outputs/apk/debug/app-debug.apk
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
           name: Plants-vs-Zombies-Peashooter-APK
           path: app/build/outputs/apk/debug/app-debug.apk
+          if-no-files-found: error 
